@@ -6,7 +6,9 @@ import numpy as np
   
 # Load the gedlibpy libraries 
 libpath = "/home/lucas/Documents/stage_gedlibpy/gedlibpy"
-# Equivalent to import librariesImport
+
+
+# Equivalent to import librariesImport?
 from ctypes import *
 lib1 = cdll.LoadLibrary(libpath + "/" + 'lib/fann/libdoublefann.so')
 lib2 = cdll.LoadLibrary(libpath + "/" + 'lib/libsvm.3.22/libsvm.so')
@@ -15,6 +17,7 @@ lib4 = cdll.LoadLibrary(libpath + "/" + 'lib/nomad/libsgtelib.so')
 
 sys.path.append(libpath)
 import gedlibpy
+#import librariesImport
 
 # My adapted modules
 import misc
@@ -151,7 +154,7 @@ def compute_median(script, listID, dataset,verbose=False):
     Returns:
     A networkX graph, which is the median, with corresponding sod
     """
-    print(len(listID))
+    if(verbose): print(len(listID))
     median_set_index, median_set_sod = compute_median_set(script, listID)
     sods = []
     #Ajout median dans environnement
@@ -160,8 +163,7 @@ def compute_median(script, listID, dataset,verbose=False):
     cur_med_id = replace_graph_in_env(script,median,-1)
     med_distances, med_mappings, cur_sod = update_mappings(script,cur_med_id,listID)
     sods.append(cur_sod)
-    if(verbose):
-        print(cur_sod)
+    if(verbose): print("Current SOD: ", cur_sod)
     ite_max = 50
     old_sod = cur_sod * 2
     ite = 0
@@ -176,8 +178,7 @@ def compute_median(script, listID, dataset,verbose=False):
         med_distances, med_mappings, cur_sod = update_mappings(script,cur_med_id,listID)        
         
         sods.append(cur_sod)
-        if(verbose):
-            print(cur_sod)
+        if(verbose): print("Current SOD: ", cur_sod)
         ite += 1
     return median, cur_sod, sods, set_median
 
@@ -260,7 +261,9 @@ if __name__ == "__main__":
         
         print("Making blobs...")
         graphs, classes = eg.make_blobs(centers,cl, params)
-        
+        # Fix labeling
+        eg.relabel_nodes_to_int(graphs)
+
         # Now we have the graphs. Add to env 
         listID = []
         for g, c in zip(graphs, classes):
@@ -274,7 +277,45 @@ if __name__ == "__main__":
         median, sod , sods_path, set_median = compute_median(gedlibpy,listID,graphs,verbose=True)
     
         print("SOD: ",sod)
+        print("SOD path: ",sods_path)        
+        
+        """
         import matplotlib.pyplot as plt
-        ax = plt.gca()
-        misc.draw_Letter(median, ax)
-
+        fig, ax = plt.subplots(1,2)
+        misc.draw_Letter(centers[0], ax[0])
+        ax[0].set_title("Center graph")
+        misc.draw_Letter(median, ax[1])
+        ax[1].set_title("Median graph")
+        plt.show()
+        """
+        
+        # Calculate distance between every graph
+        all_graphs = graphs #+ centers
+        all_graphs.append(median)
+        
+        all_classes = classes + cl #+ cl
+        eg.relabel_nodes_to_int(all_graphs)
+        
+        gedlibpy.restart_env()
+        
+        listID = []
+        for g, c in zip(all_graphs,all_classes):
+            listID.append(gedlibpy.add_nx_graph(g,c))  
+                  
+        gedlibpy.set_edit_cost("LETTER")
+        gedlibpy.init()
+        gedlibpy.set_method("IPFP", "")
+        gedlibpy.init_method()
+        
+        dist = np.zeros((len(listID),len(listID)))
+        mappings = []
+        for ii,i in enumerate(listID):
+            aux = []
+            for jj,j in enumerate(listID):
+                gedlibpy.run_method(i,j)
+                dist[ii,jj] = gedlibpy.get_upper_bound(i,j)
+                aux.append(gedlibpy.get_forward_map(i,j)) 
+            mappings.append(aux)
+        print(dist)
+        print(np.sum(dist, 0))
+        print(mappings)

@@ -71,7 +71,7 @@ Se importaba pygraph, pero resulta que hay otra libreria con ese nombre, entonce
 
 
 
-################### INSTALACIÓN #############
+################### INSTALACIÓN Y ERRORES #############
 
 0. Clonar el repositorio
 
@@ -132,6 +132,15 @@ lib4 = cdll.LoadLibrary(libpath + "/" + 'lib/nomad/libsgtelib.so')
 sys.path.append(libpath)
 import gedlibpy
 
+4. Hay problemas con los indices en gedlibpy.pyx, funciones compute_edit_distance_on_nx_graphs y compute_edit_distance_on_GXl_graphs
+Traceback (most recent call last):
+  File "ged_median.py", line 296, in <module>
+    dist, maps = gedlibpy.compute_edit_distance_on_nx_graphs(all_graphs, "", "LETTER", "IPFP", "")
+  File "gedlibpy.pyx", line 952, in gedlibpy.compute_edit_distance_on_nx_graphs
+    resDistance[g][h] = get_upper_bound(g,h)
+IndexError: list assignment index out of range
+
+Voy a comentar y ejecutar de nuevo setup.py
 
 
 ########### Sobre GEDLIBPY ###############

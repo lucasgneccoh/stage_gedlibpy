@@ -95,8 +95,11 @@ def apply_edits(g, operations, params):
     
 def relabel_nodes_to_int(graphs):
     for g in graphs:
-        pass
-        # TODO: add relabeling to integers
+    # To avoid overlapping
+        mapping = dict(zip(list(g.nodes()), list(map(str,g.nodes()))))
+        nx.relabel_nodes(g, mapping, copy=False)
+        mapping = dict(zip(list(g.nodes()), range(g.number_of_nodes())))
+        nx.relabel_nodes(g, mapping, copy=False)
         
     
 """
