@@ -2,6 +2,7 @@
 Working over the repositories gedlibpy and gedlib
 
 This repository has to be next to the gedlibpy repository
+
 I myself have done modifications to some files in the gedlibpy local copy that I have, so for the moment this repository is not self-contained.
 
 In the following commits I will link the gedlibpy project to this repository to make it ready to launch.
