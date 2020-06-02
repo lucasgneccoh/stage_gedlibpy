@@ -3,8 +3,10 @@ import xml.etree.ElementTree as ET
 import sys
 import networkx as nx
 import numpy as np
+
+import misc
    
-##### All graphs are treated as networkx objects
+##### All graphs are treated as networkx graph objects
 ##### EDIT FUNCTIONS #####
 def edit_add_node(graph, params):
     attrs = params['node_attr']
@@ -49,7 +51,6 @@ def edit_transform_node(graph, params):
         func = attrs[a]
         graph.nodes[n][a] = func(graph, graph.nodes[n][a])
         
-    
 def edit_transform_edge(graph,params):
     if graph.number_of_edges()==0: return
     # Take an existing node and modify its attributes
@@ -62,6 +63,83 @@ def edit_transform_edge(graph,params):
         graph.edges[e][a] = func(graph, graph.edges[e][a])
 
 ##### PARAMS for datasets #####
+    
+def params_guess_best(filename, data_path=None):
+    # Use the struct to guess the nature of the label spaces
+    # Path can be a single gxl graph file, or an xml/cxl collection of graphs
+    params = dict()
+    # The key part is defining the functions to generate values for each attribute
+    params['node_attr'] = {}
+    params['edge_attr'] = {}
+    if filename.split('.')[-1]=='gxl':
+        graph, struct = misc.loadGXL(filename)
+        # If only a graph is given, we use np.choice over the possible values as if the space was finite and totally represented by the given graph
+        for a1 in struct['nodes']:
+            l = list(nx.get_node_attributes(graph, a1).values())
+            params['node_attr'].update({a1: lambda g,v, l = l: np.random.choice(l)})
+        for a2 in struct['edges']:
+            l = list(nx.get_edge_attributes(graph, a2).values())
+            params['edge_attr'].update({a2: lambda g,v, l=l: np.random.choice(l)})
+
+    else:    
+        if not data_path is None:
+            dirname_dataset = data_path
+        else:
+            dirname_dataset = os.path.dirname(filename)
+        graphs, cls, struct, labels = misc.loadFromXML(filename, dirname_dataset)
+        
+        # For now, if a collection of graphs is given, we keep the discrete empirical distribution approach
+        for x1 in labels['nodes']:
+            l = labels['nodes'][x1]
+            params['node_attr'][x1] = lambda g,v, l=l: np.random.choice(l)
+        for x2 in labels['edges']:
+            l = labels['edges'][x2]
+            params['edge_attr'][x2] = lambda g,v, l=l: np.random.choice(l)
+    
+    # Default value
+    params["size"] = 20
+    params["girth"] = lambda : 5
+
+    # All edit functions with same probability
+    params["operations"] = [edit_add_node, edit_add_edge, edit_delete_node, edit_delete_edge, edit_transform_node, edit_transform_edge]
+    # Uniform probability
+    params["probability"] = None
+    return params   
+    
+def params_acyclic():
+    data_path = "/home/lucas/Documents/stage_gedlibpy/gedlibpy/include/gedlib-master/data/datasets/acyclic"
+    filename = "/home/lucas/Documents/stage_gedlibpy/gedlibpy/include/gedlib-master/data/collections/acyclic.xml"
+    return params_guess_best(filename, data_path)
+
+def params_AIDS():
+    data_path = "/home/lucas/Documents/stage_gedlibpy/gedlibpy/include/gedlib-master/data/datasets/AIDS/data"
+    filename = "/home/lucas/Documents/stage_gedlibpy/gedlibpy/include/gedlib-master/data/collections/AIDS.xml"
+    return params_guess_best(filename, data_path)
+
+def params_alkane():
+    data_path = "/home/lucas/Documents/stage_gedlibpy/gedlibpy/include/gedlib-master/data/datasets/alkane"
+    filename = "/home/lucas/Documents/stage_gedlibpy/gedlibpy/include/gedlib-master/data/collections/alkane.xml"
+    return params_guess_best(filename, data_path)
+    
+def params_CMUGED():
+    data_path = "/home/lucas/Documents/stage_gedlibpy/gedlibpy/include/gedlib-master/data/datasets/CMU-GED/CMU"
+    filename = "/home/lucas/Documents/stage_gedlibpy/gedlibpy/include/gedlib-master/data/collections/CMU-GED.xml"
+    return params_guess_best(filename, data_path)   
+
+def params_Fingerprint():
+    data_path = "/home/lucas/Documents/stage_gedlibpy/gedlibpy/include/gedlib-master/data/datasets/Fingerprint/data"
+    filename = "/home/lucas/Documents/stage_gedlibpy/gedlibpy/include/gedlib-master/data/collections/Fingerprint.xml"
+    return params_guess_best(filename, data_path)
+    
+def params_GREC():
+    # Integer, String. Values change for different attributes
+    # Some attributes depend on the values of other attributes! For example node type corner or intersection depend on wheter the node is drawn as the intersection of two edges or not. Hard to calculate
+    # Random approach will generate wrong graphs
+    data_path = "/home/lucas/Documents/stage_gedlibpy/gedlibpy/include/gedlib-master/data/datasets/GREC/data"
+    filename = "/home/lucas/Documents/stage_gedlibpy/gedlibpy/include/gedlib-master/data/collections/GREC.xml"
+    return params_guess_best(filename, data_path)
+    return 0
+    
 def params_Letter():
     # LETTER dataset
     params = dict()
@@ -81,13 +159,43 @@ def params_Letter():
     params['node_attr'] = {'x': lambda g, v: func_unif_coord(g, v, 'x'), 'y': lambda g, v: func_unif_coord(g, v, 'y')}
     params['edge_attr'] = {}
 
+    # Default value
     params["size"] = 20
-    params["girth"] = lambda : np.random.randint(1,100)
+    params["girth"] = lambda : 5
+
+    # All edit functions with same probability
     params["operations"] = [edit_add_node, edit_add_edge, edit_delete_node, edit_delete_edge, edit_transform_node, edit_transform_edge]
     # Uniform probability
     params["probability"] = None
     return params
- 
+
+def params_mao():
+    data_path = "/home/lucas/Documents/stage_gedlibpy/gedlibpy/include/gedlib-master/data/datasets/mao"
+    filename = "/home/lucas/Documents/stage_gedlibpy/gedlibpy/include/gedlib-master/data/collections/mao.xml"
+    return params_guess_best(filename, data_path)
+
+def params_Mutagenicity():
+    data_path = "/home/lucas/Documents/stage_gedlibpy/gedlibpy/include/gedlib-master/data/datasets/Mutagenicity/data"
+    filename = "/home/lucas/Documents/stage_gedlibpy/gedlibpy/include/gedlib-master/data/collections/Mutagenicity.xml"
+    return params_guess_best(filename, data_path)
+    
+def params_pah():
+    data_path = "/home/lucas/Documents/stage_gedlibpy/gedlibpy/include/gedlib-master/data/datasets/pah"
+    filename = "/home/lucas/Documents/stage_gedlibpy/gedlibpy/include/gedlib-master/data/collections/pah.xml"
+    return params_guess_best(filename, data_path)
+
+def params_Protein():
+    data_path = "/home/lucas/Documents/stage_gedlibpy/gedlibpy/include/gedlib-master/data/datasets/Protein/data"
+    filename = "/home/lucas/Documents/stage_gedlibpy/gedlibpy/include/gedlib-master/data/collections/Protein.xml"
+    return params_guess_best(filename, data_path)
+
+def params_SMOL():
+    data_path = "/home/lucas/Documents/stage_gedlibpy/gedlibpy/include/gedlib-master/data/datasets/S-MOL/NL10"
+    filename = "/home/lucas/Documents/stage_gedlibpy/gedlibpy/include/gedlib-master/data/collections/S-MOL.xml"
+    return params_guess_best(filename, data_path)
+    
+
+    
 ##### UTILS FUNCTIONS #####
 
 def apply_edits(g, operations, params):
@@ -155,15 +263,13 @@ if __name__ == "__main__":
     test_edit_functions = False
     test_make_blobs = True
     
-    
-    
-    import misc
+
     """
     TEST: edit functions
     """
     if test_edit_functions:
         filename = "/home/lucas/Documents/Stage/gedlibpy/include/gedlib-master/data/datasets/Letter/HIGH/A_and_L.cxl"
-        graphs,classes, _ = misc.loadFromXML(filename)
+        graphs,classes, struct, labels = misc.loadFromXML(filename)
         graph = graphs[0]
         
         # DEF params for edit operations 
@@ -193,7 +299,7 @@ if __name__ == "__main__":
         
         
         print("Loading...")
-        centers,cl, struct = misc.loadFromXML(path_orig,dataset_path)
+        centers,cl, struct, labels = misc.loadFromXML(path_orig,dataset_path)
         
         # LETTER dataset
         params = params_Letter()
@@ -211,7 +317,7 @@ if __name__ == "__main__":
         print("Plotting results")
         import matplotlib.pyplot as plt
         
-        centers,cl, struct = misc.loadFromXML(path_orig,dataset_path)
+        centers,cl, struct, labels = misc.loadFromXML(path_orig,dataset_path)
         fig, ax = plt.subplots(2,3, figsize=(14,6))
         misc.draw_Letter(centers[0], ax[0,0])
         ax[0,0].set_title("Original graphs")
@@ -219,7 +325,7 @@ if __name__ == "__main__":
         ax[1,0].set_ylabel(cl[1])
         misc.draw_Letter(centers[1], ax[1,0])
         
-        blobs,cl, struct = misc.loadFromXML(dest)
+        blobs,cl, struct, labels = misc.loadFromXML(dest)
         misc.draw_Letter(blobs[0], ax[0,1])
         misc.draw_Letter(blobs[1], ax[0,2])
         misc.draw_Letter(blobs[2], ax[1,1])

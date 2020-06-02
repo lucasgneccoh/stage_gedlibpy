@@ -17,26 +17,39 @@ import numpy as np
     - struct: the node and edge structures. See loadGXL for description
 """
 def loadFromXML(filename, dataset_path=None):
-	import xml.etree.ElementTree as ET
-	import os
-	if not dataset_path is None:
-		dirname_dataset = dataset_path
-	else:
-		dirname_dataset = os.path.dirname(filename)
-	tree = ET.parse(filename)
-	root = tree.getroot()
-	data = []
-	y = []
-	struct = None
-	for graph in root.iter('graph'):
-		mol_filename = graph.attrib['file']
-		mol_class = graph.attrib['class']
-		g, struct = loadGXL(dirname_dataset + '/' + mol_filename)
-		data.append(g)
-		y.append(mol_class)
-		
-	return data, y, struct
-	
+    if not dataset_path is None:
+        dirname_dataset = dataset_path
+    else:
+        dirname_dataset = os.path.dirname(filename)
+    tree = ET.parse(filename)
+    root = tree.getroot()
+    data = []
+    y = []
+    struct = {}
+    struct_aux={}
+    node_labels = {}
+    edge_labels = {}
+    
+    for graph in root.iter('graph'):
+        mol_filename = graph.attrib['file']
+        mol_class = graph.attrib['class']
+        g, struct_aux = loadGXL(dirname_dataset + '/' + mol_filename)
+        for a1 in struct_aux['nodes']:
+            if not a1 in node_labels: node_labels[a1] = []
+            attrs = nx.get_node_attributes(g,a1)            
+            node_labels[a1] += list(attrs.values())
+
+        for a2 in struct_aux['edges']:
+            if not a2 in edge_labels: edge_labels[a2] = []
+            attrs = nx.get_edge_attributes(g,a2)            
+            edge_labels[a2] += list(attrs.values())
+        
+        struct.update(struct_aux)
+        data.append(g)
+        y.append(mol_class)
+    labels = {'nodes': node_labels, 'edges': edge_labels}        
+    return data, y, struct, labels
+    
 """
     Taken from graphfiles.py
     Reads a gxl file describing a graph
@@ -48,51 +61,57 @@ def loadFromXML(filename, dataset_path=None):
             <node><attr name="x"><float>1.2</float></attr><attr name="y"><float>2.2</float></attr></node>
         In this case, struct['nodes'] = {"x": "float", "y": "float"}
         edges: a dictionary having the name and tag of each attribute of an edge.
+    - labels: a dictionary with the same structure as struct but having as values a list of all the values found for each attribute
 """
 def loadGXL(filename):
-	from os.path import basename
-	import networkx as nx
-	import xml.etree.ElementTree as ET
+    from os.path import basename
+    import networkx as nx
+    import xml.etree.ElementTree as ET
 
-	tree = ET.parse(filename)
-	root = tree.getroot()
-	index = 0
-	g = nx.Graph(**root[0].attrib)
-	dic = {}  # used to retrieve incident nodes of edges
-	node_attr = {}
-	edge_attr = {}
-	for node in root.iter('node'):
-		dic[node.attrib['id']] = index
-		labels = {}
-		for attr in node.iter('attr'):
-			labels[attr.attrib['name']] = attr[0].text
-			for a in attr:
-			    node_attr[attr.attrib['name']] = a.tag
-#		if 'chem' in labels:
-#			labels['label'] = labels['chem']
-#			node_attr['label'] = 'string'
-#			labels['atom'] = labels['chem']
-#			node_attr['atom'] = 'string'
-		#g.add_node(index, **labels)
-		g.add_node(node.attrib['id'], **labels)
-		index += 1
-
-	for edge in root.iter('edge'):
-		labels = {}
-		for attr in edge.iter('attr'):
-			labels[attr.attrib['name']] = attr[0].text
-			for a in attr:
-			    edge_attr[attr.attrib['name']] = a.tag
-#		if 'valence' in labels:
-#			labels['label'] = labels['valence']
-#			edge_attr['label'] = 'int' 
-#			labels['bond_type'] = labels['valence']
-#			edge_attr['bond_type'] = 'int' 
-		#g.add_edge(dic[edge.attrib['from']], dic[edge.attrib['to']], **labels)
-		g.add_edge(edge.attrib['from'], edge.attrib['to'], **labels)
-	struct = {'nodes': node_attr, 'edges': edge_attr}
-	return g, struct
-	
+    tree = ET.parse(filename)
+    root = tree.getroot()
+    index = 0
+    g = nx.Graph(**root[0].attrib)
+    dic = {}  # used to retrieve incident nodes of edges
+    node_attr = {}
+    edge_attr = {}
+    done = False
+    for node in root.iter('node'):
+        dic[node.attrib['id']] = index
+        labels = {}
+        for attr in node.iter('attr'):
+            labels[attr.attrib['name']] = attr[0].text
+            if not done:
+                for a in attr:
+                    node_attr[attr.attrib['name']] = a.tag
+        done = True
+#        if 'chem' in labels:
+#            labels['label'] = labels['chem']
+#            node_attr['label'] = 'string'
+#            labels['atom'] = labels['chem']
+#            node_attr['atom'] = 'string'
+        #g.add_node(index, **labels)
+        g.add_node(node.attrib['id'], **labels)
+        index += 1
+    done = False
+    for edge in root.iter('edge'):
+        labels = {}
+        for attr in edge.iter('attr'):
+            labels[attr.attrib['name']] = attr[0].text
+            if not done:
+                for a in attr:
+                    edge_attr[attr.attrib['name']] = a.tag
+        done = True
+#        if 'valence' in labels:
+#            labels['label'] = labels['valence']
+#            edge_attr['label'] = 'int' 
+#            labels['bond_type'] = labels['valence']
+#            edge_attr['bond_type'] = 'int' 
+        #g.add_edge(dic[edge.attrib['from']], dic[edge.attrib['to']], **labels)
+        g.add_edge(edge.attrib['from'], edge.attrib['to'], **labels)
+    struct = {'nodes': node_attr, 'edges': edge_attr}
+    return g, struct
+    
 """
     Taken from graphfiles.py
     Saves a gxl file describing a graph
@@ -121,28 +140,28 @@ def saveGXL(g,filename, struct = None):
             tag = False
             
         for v, attrs in g.nodes(data=True):
-	        gxl_file.write("<node id=\"" + str(v) + "\">")
-	        for a in attrs:	
-		        gxl_file.write("<attr name=\"" + a + "\">")
-		        if tag: gxl_file.write("<" + node_attr[a] + ">")
-		        gxl_file.write(str(attrs[a]))
-		        if tag: gxl_file.write("</" + node_attr[a] + ">")
-		        gxl_file.write("</attr>")
-	        gxl_file.write("</node>\n")
-	        
+            gxl_file.write("<node id=\"" + str(v) + "\">")
+            for a in attrs:    
+                gxl_file.write("<attr name=\"" + a + "\">")
+                if tag: gxl_file.write("<" + node_attr[a] + ">")
+                gxl_file.write(str(attrs[a]))
+                if tag: gxl_file.write("</" + node_attr[a] + ">")
+                gxl_file.write("</attr>")
+            gxl_file.write("</node>\n")
+            
         for v1, v2, attrs in g.edges(data=True):
-	        gxl_file.write("<edge from=\"" + str(v1) + "\" to=\"" + str(v2) + "\">")
-	        for a in attrs:	
-		        gxl_file.write("<attr name=\"" + a + "\">")
-		        if tag: gxl_file.write("<" + edge_attr[a] + ">")
-		        gxl_file.write(str(attrs[a]))
-		        if tag: gxl_file.write("</" + edge_attr[a] + ">")
-		        gxl_file.write("</attr>")
-	        gxl_file.write("</edge>\n")
+            gxl_file.write("<edge from=\"" + str(v1) + "\" to=\"" + str(v2) + "\">")
+            for a in attrs:    
+                gxl_file.write("<attr name=\"" + a + "\">")
+                if tag: gxl_file.write("<" + edge_attr[a] + ">")
+                gxl_file.write(str(attrs[a]))
+                if tag: gxl_file.write("</" + edge_attr[a] + ">")
+                gxl_file.write("</attr>")
+            gxl_file.write("</edge>\n")
         gxl_file.write("</graph>\n")
         gxl_file.write("</gxl>")
         gxl_file.close()
-	
+    
 
 """
     Taken from graphfiles.py
@@ -155,30 +174,30 @@ def saveGXL(g,filename, struct = None):
     - struct: it is recommended to always specify the node and edge structure to write the file. See loadGXL for the descriptions of the struct dictionary. 
 """
 def saveToXML(graphs, y, filename='gfile', graph_dir=None, struct = None):
-	import os
-	dirname_ds = os.path.dirname(filename)
-	if dirname_ds != '':
-		dirname_ds += '/'
-		if not os.path.exists(dirname_ds) :
-			os.makedirs(dirname_ds)
-				
-	if graph_dir is not None:
-		graph_dir = graph_dir + '/'
-		if not os.path.exists(graph_dir):
-			os.makedirs(graph_dir)
-	else:
-		graph_dir = dirname_ds 
-		
-	with open(filename, 'w') as fgroup:
-		fgroup.write("<?xml version=\"1.0\"?>")
-		fgroup.write("\n<!DOCTYPE GraphCollection SYSTEM \"http://www.inf.unibz.it/~blumenthal/dtd/GraphCollection.dtd\">")
-		fgroup.write("\n<GraphCollection>")
-		for idx, g in enumerate(graphs):
-			fname_tmp = "graph" + str(idx) + ".gxl"
-			saveGXL(g, graph_dir + fname_tmp, struct=struct)
-			fgroup.write("\n\t<graph file=\"" + fname_tmp + "\" class=\"" + str(y[idx]) + "\"/>")
-		fgroup.write("\n</GraphCollection>")
-		fgroup.close()
+    import os
+    dirname_ds = os.path.dirname(filename)
+    if dirname_ds != '':
+        dirname_ds += '/'
+        if not os.path.exists(dirname_ds) :
+            os.makedirs(dirname_ds)
+                
+    if graph_dir is not None:
+        graph_dir = graph_dir + '/'
+        if not os.path.exists(graph_dir):
+            os.makedirs(graph_dir)
+    else:
+        graph_dir = dirname_ds 
+        
+    with open(filename, 'w') as fgroup:
+        fgroup.write("<?xml version=\"1.0\"?>")
+        fgroup.write("\n<!DOCTYPE GraphCollection SYSTEM \"http://www.inf.unibz.it/~blumenthal/dtd/GraphCollection.dtd\">")
+        fgroup.write("\n<GraphCollection>")
+        for idx, g in enumerate(graphs):
+            fname_tmp = "graph" + str(idx) + ".gxl"
+            saveGXL(g, graph_dir + fname_tmp, struct=struct)
+            fgroup.write("\n\t<graph file=\"" + fname_tmp + "\" class=\"" + str(y[idx]) + "\"/>")
+        fgroup.write("\n</GraphCollection>")
+        fgroup.close()
 
 
 """
@@ -213,9 +232,9 @@ def draw_Letter(graph, ax):
     for n in graph.nodes:
         pos[n] = np.array([float(graph.nodes[n]['x']),float(graph.nodes[n]['y'])])
     nx.draw_networkx(graph,pos, ax = ax)
-		
-		
-		
+        
+        
+        
 if __name__ == "__main__":
     """
     # Test loadGXL and saveGXL
@@ -242,7 +261,7 @@ if __name__ == "__main__":
     
     import edit_graph as eg
     print("Loading...")
-    centers,cl, struct = loadFromXML(path_orig,dataset_path)
+    centers,cl, struct, labels = loadFromXML(path_orig,dataset_path)
     # LETTER dataset
     params = eg.params_Letter()
     params["size"] = 2
@@ -255,12 +274,12 @@ if __name__ == "__main__":
     print("Done")
     print("Plotting results")
     import matplotlib.pyplot as plt
-    centers,cl, struct = loadFromXML(path_orig,dataset_path)
+    centers,cl, struct, labels = loadFromXML(path_orig,dataset_path)
     fig, ax = plt.subplots(2,3, figsize=(14,6))
     draw_Letter(centers[0], ax[0,0])
     draw_Letter(centers[1], ax[1,0])
     
-    blobs,cl, struct = loadFromXML(dest)
+    blobs,cl, struct, labels = loadFromXML(dest)
     draw_Letter(blobs[0], ax[0,1])
     draw_Letter(blobs[1], ax[0,2])
     draw_Letter(blobs[2], ax[1,1])
