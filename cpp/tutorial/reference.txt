@@ -1,0 +1,58 @@
+/*	Best way to manipulate graphs
+ *	ExchangeGraph
+ *	Here are come examples of use
+ *
+ *
+*/
+
+/* Saves a Letter graph given as ged::ExchangeGraph as a GXL file.
+ *
+ * Helper function used by main().
+ */
+void save_letter_graph_as_gxl_file(ged::ExchangeGraph<ged::GXLNodeID, ged::GXLLabel, ged::GXLLabel> & median, const std::string & gxl_file_name) {
+	std::ofstream gxl_file(gxl_file_name.c_str());
+	gxl_file << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
+	gxl_file << "<!DOCTYPE gxl SYSTEM \"http://www.gupro.de/GXL/gxl-1.0.dtd\">\n";
+	gxl_file << "<gxl xmlns:xlink=\"http://www.w3.org/1999/xlink\">\n";
+	gxl_file << "<graph id=\"Z_HIGH_median\" edgeids=\"false\" edgemode=\"undirected\">\n";
+	for (std::size_t i{0}; i < median.num_nodes; i++) {
+		gxl_file << "<node id=\"_" << i << "\">";
+		gxl_file << "<attr name=\"x\"><float>" << median.node_labels.at(i).at("x") << "</float></attr>";
+		gxl_file << "<attr name=\"y\"><float>" << median.node_labels.at(i).at("y") << "</float></attr>";
+		gxl_file << "</node>\n";
+	}
+	for (std::size_t i{0}; i < median.num_nodes; i++) {
+		for (std::size_t j{i + 1}; j < median.num_nodes; j++) {
+			if (median.adj_matrix[i][j] == 1) {
+				gxl_file << "<edge from=\"_" << i << "\" to=\"_" << j << "\"/>\n";
+			}
+		}
+	}
+	gxl_file << "</graph></gxl>\n";
+	gxl_file.close();
+}
+
+
+
+/* Get all graphs that have been loaded into the environment in easily managable format.
+ *
+ * The structure ged::ExchangeGraph<ged::UserNodeID, ged::UserNodeLabel, ged::UserEdgeLabel>
+ * allows the user to easily inspect and modify the graphs contained in the environment.
+ * Loading them into memory is necessary only if you have to inspect the graphs after
+ * initializing the environment.
+ */
+std::vector<ged::ExchangeGraph<ged::GXLNodeID, ged::GXLLabel, ged::GXLLabel>> graphs;
+for (auto graph_id : graph_ids) {
+	graphs.emplace_back(env.get_graph(graph_id));
+}
+
+
+/* Get the ExchangeGraph representation of the set median and set the median ID to the ID of a newly added graph.
+	 *
+	 * Since we have called env.add_graph(), the environment is again uninitialized. So we have to keep in mind that
+	 * we must call env.init() again before calling env.run_method().
+	 */
+	ged::ExchangeGraph<ged::GXLNodeID, ged::GXLLabel, ged::GXLLabel> median(graphs.at(set_median_id));
+	median.id = median_id;
+
+

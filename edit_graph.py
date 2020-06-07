@@ -10,8 +10,7 @@ import misc
 ##### EDIT FUNCTIONS #####
 def edit_add_node(graph, params):
     attrs = params['node_attr']
-    label = graph.number_of_nodes()
-    while label in list(graph.nodes): label += 1
+    label = nx.utils.generate_unique_node()
     graph.add_node(label)
     for a in attrs:
         func = attrs[a]

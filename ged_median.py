@@ -104,6 +104,7 @@ def update_median_nodes(median,dataset,mappings):
     return median
 
 def update_median_edges(dataset, mappings, median, cei=0.425,cer=0.425):
+# cei=0.425,cer=0.425
 #for letter high, ceir = 1.7, alpha = 0.75
     size_dataset = len(dataset)
     ratio_cei_cer = cer/(cei + cer)
@@ -189,12 +190,57 @@ def compute_median(script, listID, dataset,verbose=False):
 
 
 
+# Auxiliary functions to avoid recompiling gedlibpy
+
+def aux_add_nx_graphs(env, graphs, classes):
+    if env.is_initialized() :
+        env.restart_env()
+    listID = []
+    for g, cl in zip(graphs, classes):
+        listID.append(env.add_nx_graph(g,cl))
+    return listID
+    
+def aux_init(env, edit_cost, method, init_options="EAGER_WITHOUT_SHUFFLED_COPIES", edit_cost_constant = [], method_options=""):
+    print("\tedit_cost")
+    env.set_edit_cost(edit_cost, edit_cost_constant)
+    print("\tinit")
+    env.init(init_options)
+    print("\tset_method")
+    env.set_method(method, method_options)
+    print("\tinit_method")    
+    env.init_method()
+
+# Auxiliary function to calculate distances and mappings
+def compute_all_ged(env):
+    listID = env.graph_ids()
+    limit = range(listID[0], listID[1])
+    resDistance = [[[] for j in limit] for i in limit]
+    resMapping = [[[] for j in limit] for i in limit]
+    
+    for g in range(listID[0], listID[1]) :
+        for h in range(listID[0], listID[1]) :
+            env.run_method(g,h)
+            resDistance[g][h] = env.get_upper_bound(g,h)
+            resMapping[g][h] = env.get_node_map(g,h)
+    return resDistance, resMapping
+    
+def compute_ged_wrt_id(env, x):
+    listID = env.graph_ids()
+    limit = range(listID[0], listID[1])
+    resDistance = [[] for j in limit]
+    resMapping = [[] for j in limit]
+    
+    for g in range(listID[0], listID[1]) :
+        env.run_method(g,x)
+        resDistance[g] = env.get_upper_bound(g,x)
+        resMapping[g] = env.get_node_map(g,x)
+    return resDistance, resMapping
 
 
 ##### FOR TESTING #####
 if __name__ == "__main__":
 
-    print_options = False
+    print_options = True
     test_two_graphs = False
     test_median = True
 
@@ -247,75 +293,70 @@ if __name__ == "__main__":
         
     if test_median:
         # Create a blob around a graph and calculate median
-        path_orig = "/home/lucas/Documents/stage_gedlibpy/stage/data/test_blobs/orig/one_graph.xml"
+        path_orig = "/home/lucas/Documents/stage_gedlibpy/gedlibpy/include/gedlib-master/data/collections/Letter.xml"
         dataset_path = "/home/lucas/Documents/stage_gedlibpy/gedlibpy/include/gedlib-master/data/datasets/Letter/LOW"
         
         
         print("Loading...")
-        centers,cl, struct = misc.loadFromXML(path_orig,dataset_path)
+        centers,cl, struct, labels = misc.loadFromXML(path_orig,dataset_path)
         
         # LETTER dataset
-        params = eg.params_Letter()
-        params["size"] = 3
-        params["girth"] = lambda:5
+        params = eg.params_guess_best(path_orig, dataset_path)
+        print(list(params['node_attr'].keys()))
+        print(list(params['edge_attr'].keys()))
+        params["size"] = 100
+        params["girth"] = lambda:10
+        params["probability"] = [3,1,1,1,1,1]
+        
+        
+        edit_cost = "LETTER"
+        method = "IPFP"
+        init_options="EAGER_WITHOUT_SHUFFLED_COPIES"
+        edit_cost_constant = [10,10,1]
         
         print("Making blobs...")
-        graphs, classes = eg.make_blobs(centers,cl, params)
+        graphs, classes = eg.make_blobs(centers[0:1],cl[0:1], params)
         # Fix labeling
-        eg.relabel_nodes_to_int(graphs)
+        print("Done")
+        
+        # Calculate SOD to center
+        print("Add graphs")
+        listID = aux_add_nx_graphs(gedlibpy, graphs, classes)
+        centerID = gedlibpy.add_nx_graph(centers[0], cl[0])
+        print("init")
+        aux_init(gedlibpy, edit_cost, method, edit_cost_constant=edit_cost_constant)
+        print("Compute GED")
+        distCenter, mappingsCenter = compute_ged_wrt_id(gedlibpy, centerID)
+        
 
-        # Now we have the graphs. Add to env 
-        listID = []
-        for g, c in zip(graphs, classes):
-            listID.append(gedlibpy.add_nx_graph(g,c))        
-        gedlibpy.set_edit_cost("LETTER")
-        gedlibpy.init()
-        gedlibpy.set_method("IPFP", "")
-        gedlibpy.init_method()
+        # Compute median
+        #median, sod , sods_path, set_median = compute_median(gedlibpy,listID,graphs,verbose=True)
+        print("MEDIAN________START")
+        # TODO: edit_cost_options in this function
+        gedlibpy.compute_median(graphs, classes, edit_cost, method, options="", init_option = init_options)
+        #gedlibpy.compute_median()
+        print("MEDIAN________END")
+        new_listID = gedlibpy.get_all_graph_ids()
+        print(new_listID)
+        distMed, mappingsMed = compute_ged_wrt_id(gedlibpy,new_listID[-1])
+          
         
-        # Compute
-        median, sod , sods_path, set_median = compute_median(gedlibpy,listID,graphs,verbose=True)
-    
-        print("SOD: ",sod)
-        print("SOD path: ",sods_path)        
-        
+        print("SOD to center")
+        print(np.sum(distCenter))
+        print("SOD to median:")
+        print(np.sum(distMed))        
+
         """
-        import matplotlib.pyplot as plt
-        fig, ax = plt.subplots(1,2)
-        misc.draw_Letter(centers[0], ax[0])
-        ax[0].set_title("Center graph")
-        misc.draw_Letter(median, ax[1])
-        ax[1].set_title("Median graph")
-        plt.show()
+        plot = True
+        if plot:
+            import matplotlib.pyplot as plt
+            fig, ax = plt.subplots(1,2)
+            misc.draw_Letter(centers[0], ax[0])
+            ax[0].set_title("Center graph")
+            misc.draw_Letter(median, ax[1])
+            ax[1].set_title("Median graph")
+            plt.show()
         """
         
-        # Calculate distance between every graph
-        all_graphs = graphs #+ centers
-        all_graphs.append(median)
         
-        all_classes = classes + cl #+ cl
-        eg.relabel_nodes_to_int(all_graphs)
-        
-        gedlibpy.restart_env()
-        
-        listID = []
-        for g, c in zip(all_graphs,all_classes):
-            listID.append(gedlibpy.add_nx_graph(g,c))  
-                  
-        gedlibpy.set_edit_cost("LETTER")
-        gedlibpy.init()
-        gedlibpy.set_method("IPFP", "")
-        gedlibpy.init_method()
-        
-        dist = np.zeros((len(listID),len(listID)))
-        mappings = []
-        for ii,i in enumerate(listID):
-            aux = []
-            for jj,j in enumerate(listID):
-                gedlibpy.run_method(i,j)
-                dist[ii,jj] = gedlibpy.get_upper_bound(i,j)
-                aux.append(gedlibpy.get_forward_map(i,j)) 
-            mappings.append(aux)
-        print(dist)
-        print(np.sum(dist, 0))
-        print(mappings)
+

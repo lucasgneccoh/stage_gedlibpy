@@ -1,0 +1,3 @@
+/home/lucas/Documents/stage_gedlibpy/stage/cpp/bin/CMakeFiles/rebuild_cache.dir
+/home/lucas/Documents/stage_gedlibpy/stage/cpp/bin/CMakeFiles/edit_cache.dir
+/home/lucas/Documents/stage_gedlibpy/stage/cpp/bin/CMakeFiles/stage_cpp.dir
